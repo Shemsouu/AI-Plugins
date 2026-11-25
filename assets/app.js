@@ -11,7 +11,7 @@
 
   const fmt = (n) => {
     if (n == null) return "—";
-    if (n >= 1e6) return (n / 1e6).toFixed(2).replace(".", ",").replace(",00", "") + " M";
+    if (n >= 1e6) return (n / 1e6).toFixed(2).replace(".", ",").replace(/,?0+$/, "") + " M";
     if (n >= 1e4) return Math.round(n / 1e3).toLocaleString("fr-FR") + " k";
     return n.toLocaleString("fr-FR");
   };
@@ -125,15 +125,22 @@
       : `<div class="empty"><b>Aucun résultat</b>Essaie un autre mot-clé ou retire un filtre.</div>`;
 
     $("#count").textContent = `${items.length} / ${list().length} affichés`;
+    syncChipsToggle();
   }
 
   /* ── filtres ───────────────────────────────────────────── */
   function renderChips() {
     const cats = [...new Set(list().map((x) => x.c))].sort((a, b) => a.localeCompare(b, "fr"));
-    const cls = state.tab === "skills" ? "li" : "cy";
     $("#chips").innerHTML = cats.map((c) =>
-      `<button class="chip ${cls}" aria-pressed="${state.cats.has(c)}" data-cat="${esc(c)}">${esc(c)}</button>`
+      `<button class="chip" aria-pressed="${state.cats.has(c)}" data-cat="${esc(c)}">${esc(c)}</button>`
     ).join("");
+    $("#chips-n").textContent = cats.length;
+  }
+
+  function syncChipsToggle() {
+    const total = $("#chips").querySelectorAll(".chip").length;
+    const n = state.cats.size;
+    $("#chips-n").textContent = n ? `${n} actif${n > 1 ? "s" : ""} / ${total}` : `${total} catégories`;
   }
 
   function setTab(tab) {
@@ -176,27 +183,31 @@
 
   /* ── graphiques ────────────────────────────────────────── */
   const C = {
-    cy: "#56d4ff", li: "#b8ff3c", te: "#2dd4bf", vi: "#a78bfa",
-    am: "#ffa24c", pk: "#f472b6", grid: "rgba(255,255,255,.07)", text: "#9aa5b4"
+    accent: "#B23A18", ink: "#19150F", ink2: "#4B4237",
+    muted: "#6B6154", paper: "#FBF7EE", grid: "rgba(25,21,15,.10)"
+  };
+
+  const tint = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(2)})`;
   };
 
   function chartDefaults() {
     if (!window.Chart) return false;
-    Chart.defaults.color = C.text;
-    Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+    Chart.defaults.color = C.muted;
+    Chart.defaults.font.family = '"Public Sans", system-ui, sans-serif';
     Chart.defaults.font.size = 13;
-    Chart.defaults.plugins.legend.labels.boxWidth = 12;
-    Chart.defaults.plugins.legend.labels.boxHeight = 12;
+    Chart.defaults.plugins.legend.labels.boxWidth = 10;
+    Chart.defaults.plugins.legend.labels.boxHeight = 10;
     Chart.defaults.plugins.legend.labels.padding = 16;
-    Chart.defaults.plugins.tooltip.backgroundColor = "#0f1319";
-    Chart.defaults.plugins.tooltip.borderColor = "rgba(255,255,255,.14)";
-    Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.plugins.tooltip.titleColor = "#eef1f6";
-    Chart.defaults.plugins.tooltip.bodyColor = "#c3ccd8";
+    Chart.defaults.plugins.tooltip.backgroundColor = C.ink;
+    Chart.defaults.plugins.tooltip.borderWidth = 0;
+    Chart.defaults.plugins.tooltip.titleColor = C.paper;
+    Chart.defaults.plugins.tooltip.bodyColor = "#EFE7D8";
     Chart.defaults.plugins.tooltip.padding = 12;
-    Chart.defaults.plugins.tooltip.cornerRadius = 8;
+    Chart.defaults.plugins.tooltip.cornerRadius = 2;
     Chart.defaults.plugins.tooltip.displayColors = false;
-    Chart.defaults.animation.duration = 700;
+    Chart.defaults.animation.duration = 500;
     return true;
   }
 
@@ -210,15 +221,12 @@
         labels,
         datasets: [{
           data: values,
-          backgroundColor: values.map((v) => {
-            const a = 0.35 + 0.65 * (v / max);
-            return color === C.cy ? `rgba(86,212,255,${a})` : `rgba(184,255,60,${a})`;
-          }),
+          backgroundColor: values.map((v) => tint(color, 0.3 + 0.7 * (v / max))),
           hoverBackgroundColor: color,
-          borderRadius: 6,
+          borderRadius: 0,
           borderSkipped: false,
           barThickness: "flex",
-          maxBarThickness: 22
+          maxBarThickness: 18
         }]
       },
       options: {
@@ -232,13 +240,14 @@
             border: { display: false },
             ticks: {
               callback: (v) => fmt(v),
-              maxTicksLimit: 5
+              maxTicksLimit: 5,
+              color: C.muted
             }
           },
           y: {
             grid: { display: false },
             border: { display: false },
-            ticks: { font: { size: 13 }, color: "#dbe4ef" }
+            ticks: { font: { size: 13 }, color: C.ink }
           }
         },
         plugins: {
@@ -256,15 +265,15 @@
   function initCharts() {
     if (!chartDefaults()) {
       $$(".chart-box").forEach((b) => {
-        b.innerHTML = '<p style="color:#6d7887;font-size:14px;padding:20px">Graphiques indisponibles hors ligne (CDN Chart.js bloqué).</p>';
+        b.innerHTML = '<p class="chart-off">Graphiques indisponibles hors ligne (CDN Chart.js bloqué).</p>';
       });
       return;
     }
 
     const { pluginInstalls, skillStars, categories, origins, youtube } = D.charts;
 
-    hbar("ch-installs", pluginInstalls.labels, pluginInstalls.values, C.cy, "installs");
-    hbar("ch-stars", skillStars.labels, skillStars.values, C.li, "étoiles");
+    hbar("ch-installs", pluginInstalls.labels, pluginInstalls.values, C.accent, "installs");
+    hbar("ch-stars", skillStars.labels, skillStars.values, C.ink, "étoiles");
 
     new Chart($("#ch-cats"), {
       type: "doughnut",
@@ -273,13 +282,12 @@
         datasets: [{
           data: categories.values,
           backgroundColor: [
-            "rgba(86,212,255,.9)", "rgba(45,212,191,.85)", "rgba(167,139,250,.85)",
-            "rgba(255,162,76,.85)", "rgba(244,114,182,.8)", "rgba(184,255,60,.8)",
-            "rgba(120,180,255,.7)", "rgba(148,163,184,.45)"
+            "#B23A18", "#8C3B1E", "#6E4A2C", "#A9743F",
+            "#C99A63", "#4A3B2A", "#D8B98F", "#A39A8A"
           ],
-          borderColor: "#0b0d12",
-          borderWidth: 3,
-          hoverOffset: 8
+          borderColor: C.paper,
+          borderWidth: 2,
+          hoverOffset: 6
         }]
       },
       options: {
@@ -299,10 +307,10 @@
         labels: origins.labels,
         datasets: [{
           data: origins.values,
-          backgroundColor: ["rgba(184,255,60,.9)", "rgba(86,212,255,.9)", "rgba(167,139,250,.9)"],
-          borderColor: "#0b0d12",
-          borderWidth: 3,
-          hoverOffset: 8
+          backgroundColor: ["#B23A18", "#19150F", "#A9743F"],
+          borderColor: C.paper,
+          borderWidth: 2,
+          hoverOffset: 6
         }]
       },
       options: {
@@ -329,14 +337,13 @@
         labels: ytOrder.map((v) => v.label.length > ytMax ? v.label.slice(0, ytMax - 1) + "…" : v.label),
         datasets: [{
           data: ytOrder.map((v) => v.value),
-          backgroundColor: ytOrder.map((v, i) => {
-            const a = 0.4 + 0.6 * (v.value / ytOrder[0].value);
-            return i % 2 ? `rgba(86,212,255,${a})` : `rgba(184,255,60,${a})`;
-          }),
-          hoverBackgroundColor: ytOrder.map((v, i) => (i % 2 ? C.cy : C.li)),
-          borderRadius: 6,
+          backgroundColor: ytOrder.map((v) =>
+            tint(C.accent, 0.28 + 0.72 * (v.value / ytOrder[0].value))
+          ),
+          hoverBackgroundColor: C.accent,
+          borderRadius: 0,
           borderSkipped: false,
-          maxBarThickness: 26
+          maxBarThickness: 34
         }]
       },
       options: {
@@ -358,12 +365,12 @@
           x: {
             grid: { color: C.grid },
             border: { display: false },
-            ticks: { callback: (v) => fmt(v), maxTicksLimit: 5 }
+            ticks: { callback: (v) => fmt(v), maxTicksLimit: 5, color: C.muted }
           },
           y: {
             grid: { display: false },
             border: { display: false },
-            ticks: { font: { size: ytNarrow ? 11.5 : 13 }, color: "#dbe4ef" }
+            ticks: { font: { size: ytNarrow ? 11.5 : 13 }, color: C.ink }
           }
         },
         onClick: (evt, els) => {
@@ -410,6 +417,11 @@
     $("#sort").addEventListener("change", (e) => {
       state.sort = e.target.value;
       render();
+    });
+
+    $("#chips-toggle").addEventListener("click", (e) => {
+      const open = $(".toolbar").classList.toggle("chips-open");
+      e.currentTarget.setAttribute("aria-expanded", String(open));
     });
 
     document.addEventListener("keydown", (e) => {
