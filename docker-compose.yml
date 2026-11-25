@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    image: ai-plugins:latest
+    container_name: ai-plugins
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
